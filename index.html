@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Branch Attendance System</title>
+
+  <!-- ✅ Tailwind CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+  <style>
+    body { background: #f4f6f8; }
+    .card { background: white; border-radius: 1rem; box-shadow: 0 3px 10px rgba(0,0,0,0.1); padding: 1.5rem; }
+    input, select { border: 1px solid #ccc; border-radius: 6px; padding: .5rem; width: 100%; }
+    button { background: #2563eb; color: white; border-radius: 8px; padding: .6rem 1rem; }
+    button:hover { background: #1d4ed8; }
+    #main, #adminPanel { display: none; }
+  </style>
+</head>
+<body class="p-6">
+
+  <h2 class="text-2xl font-bold mb-4 text-center">Branch Attendance System</h2>
+
+  <!-- LOGIN BOX -->
+  <div id="authBox" class="max-w-md mx-auto card">
+    <h3 class="text-xl font-semibold mb-4">Login</h3>
+    <input id="email" type="text" placeholder="Username" class="mb-3">
+    <input id="pass" type="password" placeholder="Password" class="mb-3">
+    <button id="signInBtn" class="w-full">Sign In</button>
+  </div>
+
+  <!-- MAIN SECTION -->
+  <div id="main" class="max-w-2xl mx-auto card">
+    <div class="flex justify-between mb-4">
+      <h3 class="text-xl font-semibold">Welcome <span id="userName"></span></h3>
+      <button id="signOutBtn">Sign Out</button>
+    </div>
+    <div class="mb-4">
+      <label class="font-semibold">Assigned Branch</label>
+      <select id="branchSelect" disabled class="mt-1"></select>
+    </div>
+    <button id="markBtn" class="w-full mb-3">Mark Attendance</button>
+    <div id="status" class="text-center text-green-600 font-semibold"></div>
+  </div>
+
+  <!-- ADMIN PANEL -->
+  <div id="adminPanel" class="max-w-4xl mx-auto card mt-6">
+    <h3 class="text-2xl font-bold mb-4">Admin Panel</h3>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <!-- Branch Section -->
+      <div>
+        <h4 class="text-lg font-semibold mb-2">Add Branch</h4>
+        <input id="branchName" placeholder="Branch Name" class="mb-2">
+        <input id="branchLat" placeholder="Latitude" class="mb-2">
+        <input id="branchLon" placeholder="Longitude" class="mb-2">
+        <input id="branchRadius" placeholder="Radius (meters)" class="mb-2">
+        <button id="btnAddBranch" class="w-full mb-4">Add Branch</button>
+        <ul id="branchList"></ul>
+      </div>
+
+      <!-- User Section -->
+      <div>
+        <h4 class="text-lg font-semibold mb-2">Create User</h4>
+        <input id="userName" placeholder="Username" class="mb-2">
+        <input id="userPass" placeholder="Password" class="mb-2">
+        <select id="userBranch" class="mb-2"></select>
+        <select id="userRole" class="mb-2">
+          <option value="staff">Staff</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button id="btnCreateUser" class="w-full">Create User</button>
+        <ul id="userList"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ Modular Firebase Setup -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      getDocs,
+      doc,
+      updateDoc,
+      getDoc,
+      query,
+      where,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+
+    // ✅ Your Firebase Config
+    const firebaseConfig = {
+    apiKey: "AIzaSyArh9Lqdyio6QZ276L2ciMwEgU8BgigrFs",
+  authDomain: "user-atten.firebaseapp.com",
+  projectId: "user-atten",
+  storageBucket: "user-atten.firebasestorage.app",
+  messagingSenderId: "13092297593",
+  appId: "1:13092297593:web:dd99a876e5dec1714fada8"
+    };
+
+    // ✅ Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Elements
+    const signInBtn = document.getElementById('signInBtn');
+    const signOutBtn = document.getElementById('signOutBtn');
+    const branchSelect = document.getElementById('branchSelect');
+    const markBtn = document.getElementById('markBtn');
+    const status = document.getElementById('status');
+    const userNameEl = document.getElementById('userName');
+    const authBox = document.getElementById('authBox');
+    const mainBox = document.getElementById('main');
+    const adminPanel = document.getElementById('adminPanel');
+
+    // 🔑 Device ID
+    function getDeviceId() {
+      let id = localStorage.getItem('deviceId');
+      if (!id) {
+        id = 'dev-' + Math.random().toString(36).substring(2) + Date.now();
+        localStorage.setItem('deviceId', id);
+      }
+      return id;
+    }
+    const currentDeviceId = getDeviceId();
+    let currentUser = null;
+
+    // 🔐 LOGIN
+    signInBtn.onclick = async () => {
+      const username = document.getElementById('email').value.trim();
+      const password = document.getElementById('pass').value.trim();
+      if (!username || !password) return alert("Enter username and password");
+
+      const q = query(collection(db, 'users'), where('username', '==', username));
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) return alert("User not found");
+
+      const docSnap = snapshot.docs[0];
+      const user = docSnap.data();
+      if (user.password !== password) return alert("Incorrect password");
+
+      if (!user.deviceId) {
+        await updateDoc(doc(db, 'users', docSnap.id), { deviceId: currentDeviceId });
+      } else if (user.deviceId !== currentDeviceId) {
+        alert("Account already linked to another device");
+        return;
+      }
+
+      currentUser = { id: docSnap.id, ...user };
+      userNameEl.textContent = currentUser.username;
+      authBox.style.display = "none";
+      if (currentUser.role === 'admin') {
+        adminPanel.style.display = "block";
+        loadBranches();
+        loadUsers();
+      } else {
+        mainBox.style.display = "block";
+        loadAssignedBranch(currentUser.branchId);
+      }
+    };
+
+    // 🔓 SIGN OUT
+    signOutBtn.onclick = () => {
+      currentUser = null;
+      mainBox.style.display = "none";
+      adminPanel.style.display = "none";
+      authBox.style.display = "block";
+    };
+
+    // 🏢 LOAD ASSIGNED BRANCH
+    async function loadAssignedBranch(branchId) {
+      const ref = doc(db, "branches", branchId);
+      const bDoc = await getDoc(ref);
+      if (!bDoc.exists()) { alert("Branch not found"); return; }
+      const b = bDoc.data();
+      branchSelect.innerHTML = `<option value="${bDoc.id}">${b.name}</option>`;
+    }
+
+    // 🕒 MARK ATTENDANCE
+    markBtn.onclick = () => {
+      if (!currentUser) return alert("Login first");
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        await addDoc(collection(db, "attendance"), {
+          userId: currentUser.id,
+          branchId: currentUser.branchId,
+          timestamp: serverTimestamp(),
+          location: { lat, lon }
+        });
+        status.textContent = "✅ Attendance marked successfully!";
+      }, () => alert("Location access denied"));
+    };
+
+    // 📋 ADMIN FEATURES
+    async function loadBranches() {
+      const list = document.getElementById("branchList");
+      const sel = document.getElementById("userBranch");
+      list.innerHTML = sel.innerHTML = "";
+      const snaps = await getDocs(collection(db, "branches"));
+      snaps.forEach(d => {
+        const b = d.data();
+        const li = document.createElement("li");
+        li.textContent = `${b.name} (${b.radius_m}m)`;
+        list.appendChild(li);
+
+        const opt = document.createElement("option");
+        opt.value = d.id; opt.textContent = b.name;
+        sel.appendChild(opt);
+      });
+    }
+
+    document.getElementById("btnAddBranch").onclick = async () => {
+      const name = document.getElementById("branchName").value.trim();
+      const lat = parseFloat(document.getElementById("branchLat").value);
+      const lon = parseFloat(document.getElementById("branchLon").value);
+      const radius = parseInt(document.getElementById("branchRadius").value);
+      if (!name || isNaN(lat) || isNaN(lon) || isNaN(radius)) return alert("Fill all branch fields");
+      await addDoc(collection(db, "branches"), { name, latitude: lat, longitude: lon, radius_m: radius });
+      alert("Branch added!");
+      loadBranches();
+    };
+
+    // Add User
+    document.getElementById("btnCreateUser").onclick = async () => {
+      const username = document.getElementById("userName").value.trim();
+      const password = document.getElementById("userPass").value.trim();
+      const branchId = document.getElementById("userBranch").value;
+      const role = document.getElementById("userRole").value;
+      if (!username || !password || !branchId) return alert("Fill all fields");
+      await addDoc(collection(db, "users"), { username, password, branchId, role, deviceId: "", createdAt: serverTimestamp() });
+      alert("User created!");
+      loadUsers();
+    };
+
+    // Load users
+    async function loadUsers() {
+      const list = document.getElementById("userList");
+      list.innerHTML = "";
+      const snaps = await getDocs(collection(db, "users"));
+      snaps.forEach(d => {
+        const u = d.data();
+        const li = document.createElement("li");
+        li.textContent = `${u.username} (${u.role}) - ${u.branchId}`;
+        list.appendChild(li);
+      });
+    }
+  </script>
+</body>
+</html>

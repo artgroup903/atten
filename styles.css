@@ -1,0 +1,7 @@
+body { font-family: system-ui, Arial, sans-serif; margin:0; padding:0; background:#f5f7fb; color:#111; }
+.container { max-width:720px; margin:20px auto; background:white; padding:18px; border-radius:10px; box-shadow:0 4px 14px rgba(0,0,0,0.08); }
+h1 { margin-top:0; }
+input, select, button { padding:10px; margin:6px 0; width:100%; box-sizing:border-box; }
+button { cursor:pointer; }
+pre { background:#f0f0f0; padding:12px; border-radius:6px; max-height:220px; overflow:auto; }
+.branchItem { padding:8px; border-bottom:1px dashed #ddd; margin-bottom:6px; }
