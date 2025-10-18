@@ -2,246 +2,219 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GPS Attendance – Admin Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard | Branch Attendance System</title>
+
+  <!-- ✅ Tailwind CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
   <style>
-    body {
-      font-family: system-ui, sans-serif;
-      background: #f7f7f7;
-      padding: 20px;
-      max-width: 900px;
-      margin: auto;
-    }
-    h2 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    .card {
-      background: white;
-      padding: 20px;
-      margin-bottom: 20px;
-      border-radius: 12px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    }
-    label {
-      display: block;
-      margin-top: 10px;
-      font-weight: 600;
-    }
-    input, select {
-      width: 100%;
-      padding: 8px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      margin-top: 4px;
-    }
-    button {
-      background: #1976d2;
-      color: white;
-      border: none;
-      padding: 10px 16px;
-      border-radius: 6px;
-      margin-top: 12px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #125ca1;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: left;
-    }
-    th {
-      background: #f2f2f2;
-    }
-    .small {
-      font-size: 12px;
-      color: #666;
-    }
+    body { background-color: #f8fafc; }
+    .card { background: white; border-radius: 1rem; box-shadow: 0 3px 10px rgba(0,0,0,0.1); padding: 1.5rem; }
+    input, select { border: 1px solid #ccc; border-radius: 6px; padding: .5rem; width: 100%; }
+    button { background: #2563eb; color: white; border-radius: 8px; padding: .6rem 1rem; }
+    button:hover { background: #1d4ed8; }
+    h2 { color: #1e3a8a; }
   </style>
 </head>
-<body>
-  <h2>Admin Panel – Branch & User Management</h2>
+<body class="p-6">
 
-  <div class="card">
-    <h3>Create Branch</h3>
-    <label>Branch Name <input id="branchName" /></label>
-    <label>Latitude <input id="branchLat" type="number" step="any" /></label>
-    <label>Longitude <input id="branchLng" type="number" step="any" /></label>
-    <label>Radius (meters) <input id="branchRadius" type="number" value="100" /></label>
-    <button id="btnCreateBranch">Create Branch</button>
+  <h2 class="text-3xl font-bold text-center mb-6">Admin Dashboard</h2>
 
-    <h4>Existing Branches</h4>
-    <table id="branchesTable">
-      <thead><tr><th>Branch</th><th>Lat</th><th>Lng</th><th>Radius</th><th>Actions</th></tr></thead>
-      <tbody></tbody>
-    </table>
+  <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-8">
+
+    <!-- 🏢 Branch Management -->
+    <div class="card">
+      <h3 class="text-2xl font-semibold mb-4">Manage Branches</h3>
+
+      <div class="mb-4">
+        <input id="branchName" placeholder="Branch Name" class="mb-2">
+        <input id="branchLat" placeholder="Latitude" class="mb-2">
+        <input id="branchLon" placeholder="Longitude" class="mb-2">
+        <input id="branchRadius" placeholder="Radius (meters)" class="mb-2">
+        <button id="btnAddBranch" class="w-full mb-3">➕ Add Branch</button>
+      </div>
+
+      <h4 class="font-semibold mb-2">Existing Branches</h4>
+      <ul id="branchList" class="space-y-2"></ul>
+    </div>
+
+    <!-- 👥 User Management -->
+    <div class="card">
+      <h3 class="text-2xl font-semibold mb-4">Manage Users</h3>
+
+      <div class="mb-4">
+        <input id="userName" placeholder="Username" class="mb-2">
+        <input id="userPass" placeholder="Password" class="mb-2">
+        <select id="userBranch" class="mb-2"></select>
+        <select id="userRole" class="mb-2">
+          <option value="staff">Staff</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button id="btnCreateUser" class="w-full mb-3">👤 Create User</button>
+      </div>
+
+      <h4 class="font-semibold mb-2">Existing Users</h4>
+      <ul id="userList" class="space-y-2"></ul>
+    </div>
   </div>
 
-  <div class="card">
-    <h3>Create User (linked to a branch)</h3>
-    <label>Username <input id="userName" /></label>
-    <label>Password <input id="userPass" type="password" /></label>
-    <label>Select Branch
-      <select id="userBranch"></select>
-    </label>
-    <label>Role
-      <select id="userRole">
-        <option value="user">User</option>
-        <option value="admin">Admin</option>
-      </select>
-    </label>
-    <button id="btnCreateUser">Create User</button>
+  <!-- ✅ Firebase & Admin Script -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      getDocs,
+      deleteDoc,
+      doc,
+      serverTimestamp,
+      updateDoc
+    } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
-    <h4>Existing Users</h4>
-    <table id="usersTable">
-      <thead><tr><th>Username</th><th>Branch</th><th>Role</th><th>Device Lock</th><th>Actions</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore-compat.js"></script>
-
-  <script>
-    // 🔥 Replace this config with your Firebase project config
+    // ✅ Firebase Config (same as your project)
     const firebaseConfig = {
       apiKey: "AIzaSyArh9Lqdyio6QZ276L2ciMwEgU8BgigrFs",
       authDomain: "user-atten.firebaseapp.com",
       projectId: "user-atten",
+      storageBucket: "user-atten.firebasestorage.app",
+      messagingSenderId: "13092297593",
+      appId: "1:13092297593:web:dd99a876e5dec1714fada8"
     };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
 
-    // =================== BRANCH MANAGEMENT ===================
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Elements
+    const branchList = document.getElementById('branchList');
+    const branchSelect = document.getElementById('userBranch');
+    const userList = document.getElementById('userList');
+
+    // 📍 Load Branches
     async function loadBranches() {
-      const tbody = document.querySelector("#branchesTable tbody");
-      const select = document.getElementById("userBranch");
-      tbody.innerHTML = "<tr><td colspan='5'>Loading...</td></tr>";
-      select.innerHTML = "<option value=''>Select Branch</option>";
-
-      const snap = await db.collection("branches").get();
-      tbody.innerHTML = "";
-      snap.forEach(doc => {
-        const b = doc.data();
-        // table row
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${b.name}</td>
-          <td>${b.lat}</td>
-          <td>${b.lng}</td>
-          <td>${b.radiusMeters}</td>
-          <td><button onclick="deleteBranch('${doc.id}')">Delete</button></td>
+      branchList.innerHTML = branchSelect.innerHTML = "";
+      const snaps = await getDocs(collection(db, "branches"));
+      snaps.forEach((d) => {
+        const b = d.data();
+        const li = document.createElement("li");
+        li.className = "p-3 bg-gray-100 rounded-md flex justify-between items-center";
+        li.innerHTML = `
+          <span>${b.name} (${b.radius_m}m)</span>
+          <div class="space-x-2">
+            <button class="bg-yellow-500 hover:bg-yellow-600 px-2 py-1 text-sm rounded" data-id="${d.id}" data-type="edit">Edit</button>
+            <button class="bg-red-600 hover:bg-red-700 px-2 py-1 text-sm rounded" data-id="${d.id}" data-type="delete">Delete</button>
+          </div>
         `;
-        tbody.appendChild(tr);
+        branchList.appendChild(li);
 
-        // dropdown option
         const opt = document.createElement("option");
-        opt.value = doc.id;
-        opt.text = b.name;
-        select.appendChild(opt);
+        opt.value = d.id;
+        opt.textContent = b.name;
+        branchSelect.appendChild(opt);
       });
     }
 
-    async function deleteBranch(id) {
-      if (!confirm("Delete this branch?")) return;
-      await db.collection("branches").doc(id).delete();
-      await loadBranches();
-    }
-
-    document.getElementById("btnCreateBranch").onclick = async () => {
+    // ➕ Add Branch
+    document.getElementById("btnAddBranch").onclick = async () => {
       const name = document.getElementById("branchName").value.trim();
       const lat = parseFloat(document.getElementById("branchLat").value);
-      const lng = parseFloat(document.getElementById("branchLng").value);
+      const lon = parseFloat(document.getElementById("branchLon").value);
       const radius = parseInt(document.getElementById("branchRadius").value);
 
-      if (!name || isNaN(lat) || isNaN(lng)) {
-        alert("Please fill all branch fields correctly.");
-        return;
-      }
+      if (!name || isNaN(lat) || isNaN(lon) || isNaN(radius)) return alert("⚠️ Fill all branch fields");
 
-      await db.collection("branches").add({
-        name, lat, lng, radiusMeters: radius
+      await addDoc(collection(db, "branches"), {
+        name,
+        latitude: lat,
+        longitude: lon,
+        radius_m: radius,
+        createdAt: serverTimestamp()
       });
-
-      document.getElementById("branchName").value = "";
-      document.getElementById("branchLat").value = "";
-      document.getElementById("branchLng").value = "";
-      document.getElementById("branchRadius").value = "100";
-
+      alert("✅ Branch added!");
       loadBranches();
     };
 
-    // =================== USER MANAGEMENT ===================
-    async function loadUsers() {
-      const tbody = document.querySelector("#usersTable tbody");
-      tbody.innerHTML = "<tr><td colspan='5'>Loading...</td></tr>";
+    // 🗑️ Edit / Delete Branch
+    branchList.addEventListener("click", async (e) => {
+      const id = e.target.dataset.id;
+      if (!id) return;
 
-      const snap = await db.collection("users").get();
-      tbody.innerHTML = "";
-      snap.forEach(doc => {
-        const u = doc.data();
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${u.username}</td>
-          <td>${u.branchId || '-'}</td>
-          <td>${u.role}</td>
-          <td class="small">${u.deviceId ? u.deviceId : "<em>Not linked</em>"}</td>
-          <td>
-            <button onclick="resetDevice('${doc.id}')">Reset Device</button>
-            <button onclick="deleteUser('${doc.id}')">Delete</button>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
+      if (e.target.dataset.type === "delete") {
+        if (!confirm("Delete this branch?")) return;
+        await deleteDoc(doc(db, "branches", id));
+        alert("✅ Branch deleted!");
+        loadBranches();
+      }
 
-    async function deleteUser(id) {
-      if (!confirm("Delete this user?")) return;
-      await db.collection("users").doc(id).delete();
-      await loadUsers();
-    }
+      if (e.target.dataset.type === "edit") {
+        const newName = prompt("Enter new branch name:");
+        if (!newName) return;
+        await updateDoc(doc(db, "branches", id), { name: newName });
+        alert("✅ Branch updated!");
+        loadBranches();
+      }
+    });
 
-    async function resetDevice(id) {
-      if (!confirm("Reset device lock for this user?")) return;
-      await db.collection("users").doc(id).update({ deviceId: "" });
-      alert("Device lock reset. User can now log in from a new device.");
-      loadUsers();
-    }
-
+    // 👤 Create User
     document.getElementById("btnCreateUser").onclick = async () => {
       const username = document.getElementById("userName").value.trim();
       const password = document.getElementById("userPass").value.trim();
       const branchId = document.getElementById("userBranch").value;
       const role = document.getElementById("userRole").value;
 
-      if (!username || !password || !branchId) {
-        alert("Please fill all user fields.");
-        return;
-      }
+      if (!username || !password || !branchId) return alert("⚠️ Fill all user fields");
 
-      await db.collection("users").add({
+      await addDoc(collection(db, "users"), {
         username,
         password,
         branchId,
         role,
-        deviceId: "",  // locked on first login
-        createdAt: new Date().toISOString()
+        deviceId: "",
+        createdAt: serverTimestamp(),
       });
-
-      document.getElementById("userName").value = "";
-      document.getElementById("userPass").value = "";
-      await loadUsers();
+      alert("✅ User created!");
+      loadUsers();
     };
 
-    // Init lists
+    // 👥 Load Users
+    async function loadUsers() {
+      userList.innerHTML = "";
+      const snaps = await getDocs(collection(db, "users"));
+      snaps.forEach((d) => {
+        const u = d.data();
+        const li = document.createElement("li");
+        li.className = "p-3 bg-gray-100 rounded-md flex justify-between items-center";
+        li.innerHTML = `
+          <span>${u.username} (${u.role}) - <small>${u.branchId}</small></span>
+          <div class="space-x-2">
+            <button class="bg-purple-500 hover:bg-purple-600 px-2 py-1 text-sm rounded" data-id="${d.id}" data-type="reset">Reset Device</button>
+            <button class="bg-red-600 hover:bg-red-700 px-2 py-1 text-sm rounded" data-id="${d.id}" data-type="delete">Delete</button>
+          </div>
+        `;
+        userList.appendChild(li);
+      });
+    }
+
+    // ⚙️ Delete or Reset Device
+    userList.addEventListener("click", async (e) => {
+      const id = e.target.dataset.id;
+      if (!id) return;
+
+      if (e.target.dataset.type === "delete") {
+        if (!confirm("Delete this user?")) return;
+        await deleteDoc(doc(db, "users", id));
+        alert("✅ User deleted!");
+        loadUsers();
+      }
+
+      if (e.target.dataset.type === "reset") {
+        await updateDoc(doc(db, "users", id), { deviceId: "" });
+        alert("✅ Device reset successful!");
+      }
+    });
+
+    // Initial Load
     loadBranches();
     loadUsers();
   </script>

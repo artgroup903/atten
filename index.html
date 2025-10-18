@@ -62,7 +62,7 @@
       <!-- User Section -->
       <div>
         <h4 class="text-lg font-semibold mb-2">Create User</h4>
-        <input id="userName" placeholder="Username" class="mb-2">
+        <input id="userNameInput" placeholder="Username" class="mb-2">
         <input id="userPass" placeholder="Password" class="mb-2">
         <select id="userBranch" class="mb-2"></select>
         <select id="userRole" class="mb-2">
@@ -79,16 +79,8 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
     import {
-      getFirestore,
-      collection,
-      addDoc,
-      getDocs,
-      doc,
-      updateDoc,
-      getDoc,
-      query,
-      where,
-      serverTimestamp
+      getFirestore, collection, addDoc, getDocs, doc,
+      updateDoc, getDoc, query, where, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
     // ✅ Firebase Config
@@ -127,20 +119,20 @@
     const currentDeviceId = getDeviceId();
     let currentUser = null;
 
-    // 🌍 Helper: calculate distance (Haversine formula)
+    // 🌍 Helper: calculate distance (Haversine)
     function getDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371000; // Earth radius (meters)
+      const R = 6371000;
       const dLat = (lat2 - lat1) * Math.PI / 180;
       const dLon = (lon2 - lon1) * Math.PI / 180;
       const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.sin(dLat / 2) ** 2 +
         Math.cos(lat1 * Math.PI / 180) *
         Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        Math.sin(dLon / 2) ** 2;
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    // 🔐 LOGIN with location restriction
+    // 🔐 LOGIN
     signInBtn.onclick = async () => {
       const username = document.getElementById('email').value.trim();
       const password = document.getElementById('pass').value.trim();
@@ -161,29 +153,26 @@
       const branch = branchDoc.data();
 
       navigator.geolocation.getCurrentPosition(async (pos) => {
-        const userLat = pos.coords.latitude;
-        const userLon = pos.coords.longitude;
-        const distance = getDistance(userLat, userLon, branch.latitude, branch.longitude);
-
-        console.log(`User distance from branch: ${distance} meters`);
+        const { latitude, longitude } = pos.coords;
+        const distance = getDistance(latitude, longitude, branch.latitude, branch.longitude);
 
         if (distance > branch.radius_m) {
-          alert("🚫 Login blocked. You are outside the authorized branch area.");
+          alert("🚫 You are outside the authorized branch area.");
           return;
         }
 
-        // Device binding
+        // Device lock
         if (!user.deviceId) {
           await updateDoc(doc(db, 'users', docSnap.id), { deviceId: currentDeviceId });
         } else if (user.deviceId !== currentDeviceId) {
-          alert("Account already linked to another device");
+          alert("Account linked to another device");
           return;
         }
 
-        // ✅ Login success
         currentUser = { id: docSnap.id, ...user };
         userNameEl.textContent = currentUser.username;
         authBox.style.display = "none";
+
         if (currentUser.role === 'admin') {
           adminPanel.style.display = "block";
           loadBranches();
@@ -192,8 +181,7 @@
           mainBox.style.display = "block";
           loadAssignedBranch(currentUser.branchId);
         }
-
-      }, () => alert("⚠️ Location access denied. Please enable GPS to log in."));
+      }, () => alert("⚠️ Location access denied."));
     };
 
     // 🔓 SIGN OUT
@@ -204,11 +192,11 @@
       authBox.style.display = "block";
     };
 
-    // 🏢 Load assigned branch for staff
+    // 🏢 Load assigned branch
     async function loadAssignedBranch(branchId) {
       const ref = doc(db, "branches", branchId);
       const bDoc = await getDoc(ref);
-      if (!bDoc.exists()) { alert("Branch not found"); return; }
+      if (!bDoc.exists()) return alert("Branch not found");
       const b = bDoc.data();
       branchSelect.innerHTML = `<option value="${bDoc.id}">${b.name}</option>`;
     }
@@ -217,19 +205,18 @@
     markBtn.onclick = () => {
       if (!currentUser) return alert("Login first");
       navigator.geolocation.getCurrentPosition(async (pos) => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
+        const { latitude, longitude } = pos.coords;
         await addDoc(collection(db, "attendance"), {
           userId: currentUser.id,
           branchId: currentUser.branchId,
           timestamp: serverTimestamp(),
-          location: { lat, lon }
+          location: { lat: latitude, lon: longitude }
         });
         status.textContent = "✅ Attendance marked successfully!";
       }, () => alert("Location access denied"));
     };
 
-    // 📋 Admin: Load branches
+    // 📋 Admin load branches
     async function loadBranches() {
       const list = document.getElementById("branchList");
       const sel = document.getElementById("userBranch");
@@ -237,13 +224,8 @@
       const snaps = await getDocs(collection(db, "branches"));
       snaps.forEach(d => {
         const b = d.data();
-        const li = document.createElement("li");
-        li.textContent = `${b.name} (${b.radius_m}m)`;
-        list.appendChild(li);
-
-        const opt = document.createElement("option");
-        opt.value = d.id; opt.textContent = b.name;
-        sel.appendChild(opt);
+        list.innerHTML += `<li>${b.name} (${b.radius_m}m)</li>`;
+        sel.innerHTML += `<option value="${d.id}">${b.name}</option>`;
       });
     }
 
@@ -253,7 +235,7 @@
       const lat = parseFloat(document.getElementById("branchLat").value);
       const lon = parseFloat(document.getElementById("branchLon").value);
       const radius = parseInt(document.getElementById("branchRadius").value);
-      if (!name || isNaN(lat) || isNaN(lon) || isNaN(radius)) return alert("Fill all branch fields");
+      if (!name || isNaN(lat) || isNaN(lon) || isNaN(radius)) return alert("Fill all fields");
       await addDoc(collection(db, "branches"), { name, latitude: lat, longitude: lon, radius_m: radius });
       alert("✅ Branch added!");
       loadBranches();
@@ -261,7 +243,7 @@
 
     // 👤 Create user
     document.getElementById("btnCreateUser").onclick = async () => {
-      const username = document.getElementById("userName").value.trim();
+      const username = document.getElementById("userNameInput").value.trim();
       const password = document.getElementById("userPass").value.trim();
       const branchId = document.getElementById("userBranch").value;
       const role = document.getElementById("userRole").value;
@@ -278,9 +260,7 @@
       const snaps = await getDocs(collection(db, "users"));
       snaps.forEach(d => {
         const u = d.data();
-        const li = document.createElement("li");
-        li.textContent = `${u.username} (${u.role}) - ${u.branchId}`;
-        list.appendChild(li);
+        list.innerHTML += `<li>${u.username} (${u.role}) - ${u.branchId}</li>`;
       });
     }
   </script>
