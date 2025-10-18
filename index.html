@@ -75,7 +75,7 @@
     </div>
   </div>
 
-  <!-- ✅ Modular Firebase Setup -->
+  <!-- ✅ Firebase & Script -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
     import {
@@ -91,17 +91,16 @@
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
-    // ✅ Your Firebase Config
+    // ✅ Firebase Config
     const firebaseConfig = {
-    apiKey: "AIzaSyArh9Lqdyio6QZ276L2ciMwEgU8BgigrFs",
-  authDomain: "user-atten.firebaseapp.com",
-  projectId: "user-atten",
-  storageBucket: "user-atten.firebasestorage.app",
-  messagingSenderId: "13092297593",
-  appId: "1:13092297593:web:dd99a876e5dec1714fada8"
+      apiKey: "AIzaSyArh9Lqdyio6QZ276L2ciMwEgU8BgigrFs",
+      authDomain: "user-atten.firebaseapp.com",
+      projectId: "user-atten",
+      storageBucket: "user-atten.firebasestorage.app",
+      messagingSenderId: "13092297593",
+      appId: "1:13092297593:web:dd99a876e5dec1714fada8"
     };
 
-    // ✅ Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
@@ -116,7 +115,7 @@
     const mainBox = document.getElementById('main');
     const adminPanel = document.getElementById('adminPanel');
 
-    // 🔑 Device ID
+    // Generate persistent device ID
     function getDeviceId() {
       let id = localStorage.getItem('deviceId');
       if (!id) {
@@ -128,7 +127,20 @@
     const currentDeviceId = getDeviceId();
     let currentUser = null;
 
-    // 🔐 LOGIN
+    // 🌍 Helper: calculate distance (Haversine formula)
+    function getDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371000; // Earth radius (meters)
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) *
+        Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    // 🔐 LOGIN with location restriction
     signInBtn.onclick = async () => {
       const username = document.getElementById('email').value.trim();
       const password = document.getElementById('pass').value.trim();
@@ -142,24 +154,46 @@
       const user = docSnap.data();
       if (user.password !== password) return alert("Incorrect password");
 
-      if (!user.deviceId) {
-        await updateDoc(doc(db, 'users', docSnap.id), { deviceId: currentDeviceId });
-      } else if (user.deviceId !== currentDeviceId) {
-        alert("Account already linked to another device");
-        return;
-      }
+      const branchRef = doc(db, "branches", user.branchId);
+      const branchDoc = await getDoc(branchRef);
+      if (!branchDoc.exists()) return alert("Branch not found");
 
-      currentUser = { id: docSnap.id, ...user };
-      userNameEl.textContent = currentUser.username;
-      authBox.style.display = "none";
-      if (currentUser.role === 'admin') {
-        adminPanel.style.display = "block";
-        loadBranches();
-        loadUsers();
-      } else {
-        mainBox.style.display = "block";
-        loadAssignedBranch(currentUser.branchId);
-      }
+      const branch = branchDoc.data();
+
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const userLat = pos.coords.latitude;
+        const userLon = pos.coords.longitude;
+        const distance = getDistance(userLat, userLon, branch.latitude, branch.longitude);
+
+        console.log(`User distance from branch: ${distance} meters`);
+
+        if (distance > branch.radius_m) {
+          alert("🚫 Login blocked. You are outside the authorized branch area.");
+          return;
+        }
+
+        // Device binding
+        if (!user.deviceId) {
+          await updateDoc(doc(db, 'users', docSnap.id), { deviceId: currentDeviceId });
+        } else if (user.deviceId !== currentDeviceId) {
+          alert("Account already linked to another device");
+          return;
+        }
+
+        // ✅ Login success
+        currentUser = { id: docSnap.id, ...user };
+        userNameEl.textContent = currentUser.username;
+        authBox.style.display = "none";
+        if (currentUser.role === 'admin') {
+          adminPanel.style.display = "block";
+          loadBranches();
+          loadUsers();
+        } else {
+          mainBox.style.display = "block";
+          loadAssignedBranch(currentUser.branchId);
+        }
+
+      }, () => alert("⚠️ Location access denied. Please enable GPS to log in."));
     };
 
     // 🔓 SIGN OUT
@@ -170,7 +204,7 @@
       authBox.style.display = "block";
     };
 
-    // 🏢 LOAD ASSIGNED BRANCH
+    // 🏢 Load assigned branch for staff
     async function loadAssignedBranch(branchId) {
       const ref = doc(db, "branches", branchId);
       const bDoc = await getDoc(ref);
@@ -179,7 +213,7 @@
       branchSelect.innerHTML = `<option value="${bDoc.id}">${b.name}</option>`;
     }
 
-    // 🕒 MARK ATTENDANCE
+    // 🕒 Mark attendance
     markBtn.onclick = () => {
       if (!currentUser) return alert("Login first");
       navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -195,7 +229,7 @@
       }, () => alert("Location access denied"));
     };
 
-    // 📋 ADMIN FEATURES
+    // 📋 Admin: Load branches
     async function loadBranches() {
       const list = document.getElementById("branchList");
       const sel = document.getElementById("userBranch");
@@ -213,6 +247,7 @@
       });
     }
 
+    // 📍 Add branch
     document.getElementById("btnAddBranch").onclick = async () => {
       const name = document.getElementById("branchName").value.trim();
       const lat = parseFloat(document.getElementById("branchLat").value);
@@ -220,11 +255,11 @@
       const radius = parseInt(document.getElementById("branchRadius").value);
       if (!name || isNaN(lat) || isNaN(lon) || isNaN(radius)) return alert("Fill all branch fields");
       await addDoc(collection(db, "branches"), { name, latitude: lat, longitude: lon, radius_m: radius });
-      alert("Branch added!");
+      alert("✅ Branch added!");
       loadBranches();
     };
 
-    // Add User
+    // 👤 Create user
     document.getElementById("btnCreateUser").onclick = async () => {
       const username = document.getElementById("userName").value.trim();
       const password = document.getElementById("userPass").value.trim();
@@ -232,11 +267,11 @@
       const role = document.getElementById("userRole").value;
       if (!username || !password || !branchId) return alert("Fill all fields");
       await addDoc(collection(db, "users"), { username, password, branchId, role, deviceId: "", createdAt: serverTimestamp() });
-      alert("User created!");
+      alert("✅ User created!");
       loadUsers();
     };
 
-    // Load users
+    // 👥 Load users
     async function loadUsers() {
       const list = document.getElementById("userList");
       list.innerHTML = "";
