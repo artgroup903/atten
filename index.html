@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Branch Attendance System</title>
 
-  <!-- ✅ Tailwind CSS -->
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 
   <style>
@@ -53,8 +52,8 @@
         <h4 class="text-lg font-semibold mb-2">Add Branch</h4>
         <input id="branchName" placeholder="Branch Name" class="mb-2">
         <input id="branchLat" placeholder="Latitude" class="mb-2">
-        <input id="branchLon" placeholder="Longitude" class="mb-2">
-        <input id="branchRadius" placeholder="Radius (meters)" class="mb-2">
+        <input id="branchLng" placeholder="Longitude" class="mb-2">
+        <input id="branchRadius" placeholder="Radius (meters)" class="mb-2" value="100">
         <button id="btnAddBranch" class="w-full mb-4">Add Branch</button>
         <ul id="branchList"></ul>
       </div>
@@ -88,9 +87,6 @@
       apiKey: "AIzaSyArh9Lqdyio6QZ276L2ciMwEgU8BgigrFs",
       authDomain: "user-atten.firebaseapp.com",
       projectId: "user-atten",
-      storageBucket: "user-atten.firebasestorage.app",
-      messagingSenderId: "13092297593",
-      appId: "1:13092297593:web:dd99a876e5dec1714fada8"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -107,7 +103,7 @@
     const mainBox = document.getElementById('main');
     const adminPanel = document.getElementById('adminPanel');
 
-    // Generate persistent device ID
+    // Persistent device ID
     function getDeviceId() {
       let id = localStorage.getItem('deviceId');
       if (!id) {
@@ -119,7 +115,7 @@
     const currentDeviceId = getDeviceId();
     let currentUser = null;
 
-    // 🌍 Helper: calculate distance (Haversine)
+    // 🌍 Distance calculator (Haversine formula)
     function getDistance(lat1, lon1, lat2, lon2) {
       const R = 6371000;
       const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -154,18 +150,22 @@
 
       navigator.geolocation.getCurrentPosition(async (pos) => {
         const { latitude, longitude } = pos.coords;
-        const distance = getDistance(latitude, longitude, branch.latitude, branch.longitude);
+        const distance = getDistance(latitude, longitude, branch.lat, branch.lng);
 
-        if (distance > branch.radius_m) {
-          alert("🚫 You are outside the authorized branch area.");
+        console.log("📍 User:", latitude, longitude);
+        console.log("🏢 Branch:", branch.lat, branch.lng);
+        console.log("📏 Distance (m):", distance, "Allowed:", branch.radiusMeters);
+
+        if (distance > branch.radiusMeters) {
+          alert("🚫 You are outside the authorized branch area.\nMove closer to your branch location.");
           return;
         }
 
-        // Device lock
+        // ✅ Device lock
         if (!user.deviceId) {
           await updateDoc(doc(db, 'users', docSnap.id), { deviceId: currentDeviceId });
         } else if (user.deviceId !== currentDeviceId) {
-          alert("Account linked to another device");
+          alert("🚫 Account already linked to another device");
           return;
         }
 
@@ -181,7 +181,10 @@
           mainBox.style.display = "block";
           loadAssignedBranch(currentUser.branchId);
         }
-      }, () => alert("⚠️ Location access denied."));
+      }, (err) => {
+        console.error(err);
+        alert("⚠️ Location access denied or unavailable.");
+      });
     };
 
     // 🔓 SIGN OUT
@@ -210,7 +213,7 @@
           userId: currentUser.id,
           branchId: currentUser.branchId,
           timestamp: serverTimestamp(),
-          location: { lat: latitude, lon: longitude }
+          location: { lat: latitude, lng: longitude }
         });
         status.textContent = "✅ Attendance marked successfully!";
       }, () => alert("Location access denied"));
@@ -224,7 +227,7 @@
       const snaps = await getDocs(collection(db, "branches"));
       snaps.forEach(d => {
         const b = d.data();
-        list.innerHTML += `<li>${b.name} (${b.radius_m}m)</li>`;
+        list.innerHTML += `<li>${b.name} (${b.radiusMeters}m)</li>`;
         sel.innerHTML += `<option value="${d.id}">${b.name}</option>`;
       });
     }
@@ -233,10 +236,10 @@
     document.getElementById("btnAddBranch").onclick = async () => {
       const name = document.getElementById("branchName").value.trim();
       const lat = parseFloat(document.getElementById("branchLat").value);
-      const lon = parseFloat(document.getElementById("branchLon").value);
+      const lng = parseFloat(document.getElementById("branchLng").value);
       const radius = parseInt(document.getElementById("branchRadius").value);
-      if (!name || isNaN(lat) || isNaN(lon) || isNaN(radius)) return alert("Fill all fields");
-      await addDoc(collection(db, "branches"), { name, latitude: lat, longitude: lon, radius_m: radius });
+      if (!name || isNaN(lat) || isNaN(lng) || isNaN(radius)) return alert("Fill all fields");
+      await addDoc(collection(db, "branches"), { name, lat, lng, radiusMeters: radius });
       alert("✅ Branch added!");
       loadBranches();
     };
