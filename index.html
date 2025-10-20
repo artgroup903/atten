@@ -212,19 +212,39 @@ async function loadUsers() {
 // 🕒 Mark Attendance (once per day)
 document.getElementById("markBtn").onclick = async () => {
   statusEl.innerText = "";
+
+  if (!currentUser || !currentUser.branchId) {
+    alert("⚠️ Branch not assigned.");
+    return;
+  }
+
+  // 🔹 branch data
   const branchRef = doc(db, "branches", currentUser.branchId);
   const bDoc = await getDoc(branchRef);
   if (!bDoc.exists()) return alert("Branch not found");
   const b = bDoc.data();
 
+  // 🔹 location
   navigator.geolocation.getCurrentPosition(async (pos) => {
     const { latitude, longitude } = pos.coords;
+
+    // 🔹 distance 
     const distance = getDistance(latitude, longitude, b.lat, b.lng);
-    if (distance > b.radiusMeters) return alert("🚫 You are outside branch area");
 
-    const todayStr = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+    // 🔹 latitude/lng 
+    if (isNaN(b.lat) || isNaN(b.lng)) {
+      alert("⚠️ Invalid branch coordinates");
+      return;
+    }
 
-    // Check if attendance already exists today
+    // 🔹 distance limit 
+    if (currentUser.role !== "admin" && distance > b.radiusMeters) {
+      alert(`🚫 You are outside branch area (${Math.round(distance)}m > ${b.radiusMeters}m)`);
+      return;
+    }
+
+    // 🔹 today attendance checking
+    const todayStr = new Date().toISOString().slice(0,10);
     const q = query(
       collection(db, "attendance"),
       where("userId", "==", currentUser.id),
@@ -236,19 +256,24 @@ document.getElementById("markBtn").onclick = async () => {
       return;
     }
 
-    // Add attendance
+    // 🔹 attendance add 
     await addDoc(collection(db, "attendance"), {
       userId: currentUser.id,
       username: currentUser.username,
       branchName: b.name,
       branchId: currentUser.branchId,
       time: serverTimestamp(),
-      dateStr: todayStr
+      dateStr: todayStr,
+      location: { lat: latitude, lng: longitude, distance } // 👉 proof of location
     });
 
     statusEl.innerText = "✅ Attendance Marked Successfully!";
-  }, () => alert("⚠️ Location access denied."));
+  }, (err) => {
+    console.error(err);
+    alert("⚠️ Location access denied or unavailable.");
+  });
 };
+
 
 // 🚪 Sign out
 signOutBtn.onclick = () => location.reload();
