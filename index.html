@@ -74,7 +74,7 @@
     </div>
   </div>
 
-  <!-- Firebase & Script -->
+  <!-- Firebase Script -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
     import {
@@ -82,6 +82,7 @@
       updateDoc, getDoc, query, where, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
+    // ✅ Firebase Config
     const firebaseConfig = {
       apiKey: "AIzaSyArh9Lqdyio6QZ276L2ciMwEgU8BgigrFs",
       authDomain: "user-atten.firebaseapp.com",
@@ -101,7 +102,7 @@
     const mainBox = document.getElementById('main');
     const adminPanel = document.getElementById('adminPanel');
 
-    // Device ID
+    // Unique Device ID
     function getDeviceId() {
       let id = localStorage.getItem('deviceId');
       if (!id) {
@@ -113,7 +114,7 @@
     const currentDeviceId = getDeviceId();
     let currentUser = null;
 
-    // Distance calculator
+    // Calculate distance (Haversine)
     function getDistance(lat1, lon1, lat2, lon2) {
       const R = 6371000;
       const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -126,7 +127,7 @@
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    // LOGIN
+    // 🔐 LOGIN
     signInBtn.onclick = async () => {
       const username = document.getElementById('email').value.trim();
       const password = document.getElementById('pass').value.trim();
@@ -143,19 +144,19 @@
       const branchRef = doc(db, "branches", user.branchId);
       const branchDoc = await getDoc(branchRef);
       if (!branchDoc.exists()) return alert("Branch not found");
-
       const branch = branchDoc.data();
 
+      // ✅ Require location match for login
       navigator.geolocation.getCurrentPosition(async (pos) => {
         const { latitude, longitude } = pos.coords;
         const distance = getDistance(latitude, longitude, branch.lat, branch.lng);
 
         if (distance > branch.radiusMeters) {
-          alert("🚫 You are outside the authorized branch area.");
+          alert("🚫 You are outside the authorized branch area. Move closer to login.");
           return;
         }
 
-        // Device lock
+        // ✅ Device lock
         if (!user.deviceId) {
           await updateDoc(doc(db, 'users', docSnap.id), { deviceId: currentDeviceId });
         } else if (user.deviceId !== currentDeviceId) {
@@ -163,7 +164,7 @@
           return;
         }
 
-        currentUser = { id: docSnap.id, ...user };
+        currentUser = { id: docSnap.id, ...user, branch };
         userNameEl.textContent = currentUser.username;
         authBox.style.display = "none";
 
@@ -175,10 +176,10 @@
           mainBox.style.display = "block";
           loadAssignedBranch(currentUser.branchId);
         }
-      }, () => alert("⚠️ Location access denied."));
+      }, () => alert("⚠️ Location access denied or unavailable."));
     };
 
-    // SIGN OUT
+    // 🔓 SIGN OUT
     signOutBtn.onclick = () => {
       currentUser = null;
       mainBox.style.display = "none";
@@ -186,7 +187,7 @@
       authBox.style.display = "block";
     };
 
-    // Load assigned branch
+    // 🏢 Load assigned branch
     async function loadAssignedBranch(branchId) {
       const ref = doc(db, "branches", branchId);
       const bDoc = await getDoc(ref);
@@ -195,12 +196,17 @@
       branchSelect.innerHTML = `<option value="${bDoc.id}">${b.name}</option>`;
     }
 
-    // Mark attendance (once per day)
+    // 🕒 Mark Attendance (only if inside branch)
     markBtn.onclick = () => {
       if (!currentUser) return alert("Login first");
-
       navigator.geolocation.getCurrentPosition(async (pos) => {
         const { latitude, longitude } = pos.coords;
+        const distance = getDistance(latitude, longitude, currentUser.branch.lat, currentUser.branch.lng);
+
+        if (distance > currentUser.branch.radiusMeters) {
+          alert("🚫 You are outside the branch area. Cannot mark attendance.");
+          return;
+        }
 
         const today = new Date();
         const yyyy = today.getFullYear();
@@ -208,7 +214,6 @@
         const dd = String(today.getDate()).padStart(2, '0');
         const todayStr = `${yyyy}-${mm}-${dd}`;
 
-        // Check if attendance exists for today
         const q = query(
           collection(db, "attendance"),
           where("userId", "==", currentUser.id),
@@ -223,7 +228,6 @@
           return;
         }
 
-        // Add attendance
         await addDoc(collection(db, "attendance"), {
           userId: currentUser.id,
           branchId: currentUser.branchId,
@@ -231,11 +235,12 @@
           dateStr: todayStr,
           location: { lat: latitude, lng: longitude }
         });
+
         status.textContent = `✅ Attendance marked successfully on ${todayStr} at ${new Date().toLocaleTimeString()}`;
-      }, () => alert("Location access denied"));
+      }, () => alert("⚠️ Location access denied."));
     };
 
-    // Load branches for admin
+    // Admin Functions
     async function loadBranches() {
       const list = document.getElementById("branchList");
       const sel = document.getElementById("userBranch");
@@ -248,7 +253,6 @@
       });
     }
 
-    // Add branch
     document.getElementById("btnAddBranch").onclick = async () => {
       const name = document.getElementById("branchName").value.trim();
       const lat = parseFloat(document.getElementById("branchLat").value);
@@ -260,7 +264,6 @@
       loadBranches();
     };
 
-    // Create user
     document.getElementById("btnCreateUser").onclick = async () => {
       const username = document.getElementById("userNameInput").value.trim();
       const password = document.getElementById("userPass").value.trim();
@@ -272,7 +275,6 @@
       loadUsers();
     };
 
-    // Load users
     async function loadUsers() {
       const list = document.getElementById("userList");
       list.innerHTML = "";
