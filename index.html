@@ -126,6 +126,21 @@
     const mainBox = document.getElementById('main');
     const adminPanel = document.getElementById('adminPanel');
     const userNameEl = document.getElementById('userName');
+    const statusEl = document.getElementById('status');
+
+    const branchName = document.getElementById("branchName");
+    const branchLat = document.getElementById("branchLat");
+    const branchLng = document.getElementById("branchLng");
+    const branchRadius = document.getElementById("branchRadius");
+    const branchList = document.getElementById("branchList");
+
+    const userNameInput = document.getElementById("userNameInput");
+    const userPass = document.getElementById("userPass");
+    const userBranch = document.getElementById("userBranch");
+    const userRole = document.getElementById("userRole");
+    const userList = document.getElementById("userList");
+    const branchSelect = document.getElementById("branchSelect");
+    const signOutBtn = document.getElementById("signOutBtn");
 
     // 🔐 LOGIN
     signInBtn.onclick = async () => {
@@ -148,7 +163,6 @@
       const branch = branchDoc.data();
       const { lat, lng, radiusMeters } = branch;
 
-      // ✅ Location check
       navigator.geolocation.getCurrentPosition(async (pos) => {
         const { latitude, longitude } = pos.coords;
         const distance = getDistance(latitude, longitude, lat, lng);
@@ -159,7 +173,6 @@
           return;
         }
 
-        // ✅ Device check
         if (!user.deviceId) {
           await updateDoc(doc(db, 'users', docSnap.id), { deviceId: currentDeviceId });
         } else if (user.deviceId !== currentDeviceId) {
@@ -234,6 +247,7 @@
 
     // 🕒 Mark Attendance
     document.getElementById("markBtn").onclick = async () => {
+      statusEl.innerText = ""; // clear previous
       const branchRef = doc(db, "branches", currentUser.branchId);
       const bDoc = await getDoc(branchRef);
       if (!bDoc.exists()) return alert("Branch not found");
@@ -251,7 +265,8 @@
           branchId: currentUser.branchId,
           time: serverTimestamp(),
         });
-        status.innerText = "✅ Attendance Marked Successfully!";
+
+        statusEl.innerText = "✅ Attendance Marked Successfully!";
       }, () => alert("⚠️ Location access denied."));
     };
 
