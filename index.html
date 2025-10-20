@@ -218,32 +218,37 @@ document.getElementById("markBtn").onclick = async () => {
     return;
   }
 
-  // 🔹 branch data
+  // 🔹 ബ്രാഞ്ച് ഡാറ്റ എടുത്തുക
   const branchRef = doc(db, "branches", currentUser.branchId);
   const bDoc = await getDoc(branchRef);
   if (!bDoc.exists()) return alert("Branch not found");
   const b = bDoc.data();
 
-  // 🔹 location
   navigator.geolocation.getCurrentPosition(async (pos) => {
     const { latitude, longitude } = pos.coords;
 
-    // 🔹 distance 
+    // 🔹 Distance കണക്കാക്കുക
     const distance = getDistance(latitude, longitude, b.lat, b.lng);
 
-    // 🔹 latitude/lng 
+    // 🔹 പുതിയ field name ഉപയോഗിക്കുക
+    const branchRadius = Number(b.radius_m); // ✅ correct field name
+
     if (isNaN(b.lat) || isNaN(b.lng)) {
       alert("⚠️ Invalid branch coordinates");
       return;
     }
-
-    // 🔹 distance limit 
-    if (currentUser.role !== "admin" && distance > b.radiusMeters) {
-      alert(`🚫 You are outside branch area (${Math.round(distance)}m > ${b.radiusMeters}m)`);
+    if (isNaN(branchRadius)) {
+      alert("⚠️ Invalid branch radius");
       return;
     }
 
-    // 🔹 today attendance checking
+    // 🔹 Distance limit ചെക്ക് ചെയ്യുക (admin ഒഴികെ)
+    if (currentUser.role !== "admin" && distance > branchRadius) {
+      alert(`🚫 You are outside branch area (${Math.round(distance)}m > ${branchRadius}m)`);
+      return;
+    }
+
+    // 🔹 ഇന്നത്തെ attendance ഉണ്ടോ എന്ന് പരിശോധിക്കുക
     const todayStr = new Date().toISOString().slice(0,10);
     const q = query(
       collection(db, "attendance"),
@@ -256,7 +261,7 @@ document.getElementById("markBtn").onclick = async () => {
       return;
     }
 
-    // 🔹 attendance add 
+    // 🔹 Attendance add ചെയ്യുക
     await addDoc(collection(db, "attendance"), {
       userId: currentUser.id,
       username: currentUser.username,
@@ -264,7 +269,7 @@ document.getElementById("markBtn").onclick = async () => {
       branchId: currentUser.branchId,
       time: serverTimestamp(),
       dateStr: todayStr,
-      location: { lat: latitude, lng: longitude, distance } // 👉 proof of location
+      location: { lat: latitude, lng: longitude, distance }
     });
 
     statusEl.innerText = "✅ Attendance Marked Successfully!";
@@ -273,6 +278,7 @@ document.getElementById("markBtn").onclick = async () => {
     alert("⚠️ Location access denied or unavailable.");
   });
 };
+
 
 
 // 🚪 Sign out
