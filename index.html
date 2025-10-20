@@ -1,69 +1,291 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Attendance App — Firebase</title>
-  <link rel="stylesheet" href="styles.css">
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/12.4.0/firebase-database-compat.js"></script>
-</head>
-<body>
-  <div class="container">
-    <h1>Attendance — Firebase</h1>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Branch Attendance System</title>
 
-    <div id="authBox" class="card">
-      <h2 id="authTitle">Login</h2>
-      <input id="email" type="email" placeholder="Email" />
-      <input id="password" type="password" placeholder="Password" />
-      <div class="row">
-        <button id="loginBtn">Login</button>
-        <button id="signupBtn">Sign Up</button>
-      </div>
-      <p id="authMsg" class="msg"></p>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+  <style>
+    body { background: #f4f6f8; }
+    .card { background: white; border-radius: 1rem; box-shadow: 0 3px 10px rgba(0,0,0,0.1); padding: 1.5rem; }
+    input, select { border: 1px solid #ccc; border-radius: 6px; padding: .5rem; width: 100%; }
+    button { background: #2563eb; color: white; border-radius: 8px; padding: .6rem 1rem; }
+    button:hover { background: #1d4ed8; }
+    #main, #adminPanel { display: none; }
+  </style>
+</head>
+<body class="p-6">
+
+<h2 class="text-2xl font-bold mb-4 text-center">Branch Attendance System</h2>
+
+<!-- LOGIN BOX -->
+<div id="authBox" class="max-w-md mx-auto card">
+  <h3 class="text-xl font-semibold mb-4">Login</h3>
+  <input id="email" type="text" placeholder="Username" class="mb-3">
+  <input id="pass" type="password" placeholder="Password" class="mb-3">
+  <button id="signInBtn" class="w-full">Sign In</button>
+</div>
+
+<!-- MAIN SECTION (Staff) -->
+<div id="main" class="max-w-2xl mx-auto card">
+  <div class="flex justify-between mb-4">
+    <h3 class="text-xl font-semibold">Welcome <span id="userName"></span></h3>
+    <button id="signOutBtn">Sign Out</button>
+  </div>
+  <div class="mb-4">
+    <label class="font-semibold">Assigned Branch</label>
+    <select id="branchSelect" disabled class="mt-1"></select>
+  </div>
+  <button id="markBtn" class="w-full mb-3">📍 Mark Attendance</button>
+  <div id="status" class="text-center text-green-600 font-semibold"></div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="adminPanel" class="max-w-4xl mx-auto card mt-6">
+  <h3 class="text-2xl font-bold mb-4">Admin Panel</h3>
+
+  <div class="grid md:grid-cols-2 gap-6">
+    <!-- Branch Section -->
+    <div>
+      <h4 class="text-lg font-semibold mb-2">Add Branch</h4>
+      <input id="branchName" placeholder="Branch Name" class="mb-2">
+      <input id="branchLat" placeholder="Latitude" class="mb-2">
+      <input id="branchLng" placeholder="Longitude" class="mb-2">
+      <input id="branchRadius" placeholder="Radius (meters)" class="mb-2" value="100">
+      <button id="btnAddBranch" class="w-full mb-4">Add Branch</button>
+      <ul id="branchList"></ul>
     </div>
 
-    <div id="app" style="display:none;">
-      <div class="topbar">
-        <div>Signed in as <span id="userEmail"></span></div>
-        <div>
-          <button id="signoutBtn">Sign out</button>
-        </div>
-      </div>
-
-      <div id="attendanceCard" class="card">
-        <h2>Mark Attendance</h2>
-        <input id="studentId" placeholder="Student ID / Name" />
-        <select id="status">
-          <option value="present">Present</option>
-          <option value="absent">Absent</option>
-          <option value="late">Late</option>
-        </select>
-        <button id="markBtn">Mark</button>
-        <p id="markMsg" class="msg"></p>
-      </div>
-
-      <div id="listCard" class="card">
-        <h2>Today's Attendance</h2>
-        <table id="attTable">
-          <thead><tr><th>Time</th><th>Student</th><th>Status</th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <div class="row">
-          <button id="exportCsvBtn">Export CSV</button>
-          <button id="clearTodayBtn">Clear Today</button>
-        </div>
-      </div>
-
-      <div id="adminCard" class="card" style="display:none;">
-        <h2>Admin Controls</h2>
-        <button id="downloadAllBtn">Download All Attendance (CSV)</button>
-      </div>
+    <!-- User Section -->
+    <div>
+      <h4 class="text-lg font-semibold mb-2">Create User</h4>
+      <input id="userNameInput" placeholder="Username" class="mb-2">
+      <input id="userPass" placeholder="Password" class="mb-2">
+      <select id="userBranch" class="mb-2"></select>
+      <select id="userRole" class="mb-2">
+        <option value="staff">Staff</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button id="btnCreateUser" class="w-full">Create User</button>
+      <ul id="userList"></ul>
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <a href="attendance-list.html" class="mt-6 inline-block bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+    📋 View Attendance List
+  </a>
+</div>
+
+<!-- Firebase Script -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, getDoc, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+
+// 🔥 Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyArh9Lqdyio6QZ276L2ciMwEgU8BgigrFs",
+  authDomain: "user-atten.firebaseapp.com",
+  projectId: "user-atten",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// 🔐 Device ID
+const getDeviceId = () => {
+  let id = localStorage.getItem('deviceId');
+  if (!id) {
+    id = 'dev-' + Math.random().toString(36).substring(2) + Date.now();
+    localStorage.setItem('deviceId', id);
+  }
+  return id;
+};
+const currentDeviceId = getDeviceId();
+let currentUser = null;
+
+// 🌍 Haversine formula
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) *
+            Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Elements
+const signInBtn = document.getElementById('signInBtn');
+const authBox = document.getElementById('authBox');
+const mainBox = document.getElementById('main');
+const adminPanel = document.getElementById('adminPanel');
+const userNameEl = document.getElementById('userName');
+const statusEl = document.getElementById('status');
+
+const branchName = document.getElementById("branchName");
+const branchLat = document.getElementById("branchLat");
+const branchLng = document.getElementById("branchLng");
+const branchRadius = document.getElementById("branchRadius");
+const branchList = document.getElementById("branchList");
+
+const userNameInput = document.getElementById("userNameInput");
+const userPass = document.getElementById("userPass");
+const userBranch = document.getElementById("userBranch");
+const userRole = document.getElementById("userRole");
+const userList = document.getElementById("userList");
+const branchSelect = document.getElementById("branchSelect");
+const signOutBtn = document.getElementById("signOutBtn");
+
+// 🔐 LOGIN
+signInBtn.onclick = async () => {
+  const username = document.getElementById('email').value.trim();
+  const password = document.getElementById('pass').value.trim();
+  if (!username || !password) return alert("Enter username and password");
+
+  const q = query(collection(db, 'users'), where('username', '==', username));
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return alert("User not found");
+
+  const docSnap = snapshot.docs[0];
+  const user = docSnap.data();
+  if (user.password !== password) return alert("Incorrect password");
+
+  const branchRef = doc(db, "branches", user.branchId);
+  const branchDoc = await getDoc(branchRef);
+  if (!branchDoc.exists()) return alert("Branch not found");
+
+  const branch = branchDoc.data();
+  const { lat, lng, radiusMeters } = branch;
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude, longitude } = pos.coords;
+    const distance = getDistance(latitude, longitude, lat, lng);
+
+    if (isNaN(lat) || isNaN(lng)) return alert("⚠️ Invalid branch coordinates");
+    if (user.role !== "admin" && distance > radiusMeters) {
+      alert(`🚫 Outside branch area (${Math.round(distance)}m > ${radiusMeters}m)`);
+      return;
+    }
+
+    if (!user.deviceId) {
+      await updateDoc(doc(db, 'users', docSnap.id), { deviceId: currentDeviceId });
+    } else if (user.deviceId !== currentDeviceId) {
+      alert("🚫 Account already linked to another device");
+      return;
+    }
+
+    currentUser = { id: docSnap.id, ...user, branch };
+    userNameEl.textContent = currentUser.username;
+    authBox.style.display = "none";
+
+    if (currentUser.role === 'admin') {
+      adminPanel.style.display = "block";
+      loadBranches();
+      loadUsers();
+    } else {
+      mainBox.style.display = "block";
+      loadAssignedBranch(currentUser.branchId);
+    }
+  }, () => alert("⚠️ Location access denied or unavailable."));
+};
+/*
+// 📍 Add Branch
+document.getElementById("btnAddBranch").onclick = async () => {
+  const name = branchName.value.trim();
+  const lat = parseFloat(branchLat.value);
+  const lng = parseFloat(branchLng.value);
+  const radius = parseInt(branchRadius.value);
+  if (!name || isNaN(lat) || isNaN(lng) || isNaN(radius)) return alert("Fill all fields");
+  await addDoc(collection(db, "branches"), { name, lat, lng, radiusMeters: radius });
+  alert("✅ Branch added!");
+  loadBranches();
+};
+
+// 👤 Create User
+document.getElementById("btnCreateUser").onclick = async () => {
+  const username = userNameInput.value.trim();
+  const password = userPass.value.trim();
+  const branchId = userBranch.value;
+  const role = userRole.value;
+  if (!username || !password || !branchId) return alert("Fill all fields");
+  await addDoc(collection(db, "users"), { username, password, branchId, role, deviceId: "", createdAt: serverTimestamp() });
+  alert("✅ User created!");
+  loadUsers();
+};
+*/
+
+async function loadAssignedBranch(branchId) {
+  const ref = doc(db, "branches", branchId);
+  const bDoc = await getDoc(ref);
+  if (!bDoc.exists()) return;
+  branchSelect.innerHTML = `<option>${bDoc.data().name}</option>`;
+}
+
+async function loadBranches() {
+  const snaps = await getDocs(collection(db, "branches"));
+  branchList.innerHTML = userBranch.innerHTML = "";
+  snaps.forEach(d => {
+    const b = d.data();
+    branchList.innerHTML += `<li>${b.name} (${b.radiusMeters}m)</li>`;
+    userBranch.innerHTML += `<option value="${d.id}">${b.name}</option>`;
+  });
+}
+
+async function loadUsers() {
+  const snaps = await getDocs(collection(db, "users"));
+  userList.innerHTML = "";
+  snaps.forEach(d => {
+    const u = d.data();
+    userList.innerHTML += `<li>${u.username} (${u.role})</li>`;
+  });
+}
+
+// 🕒 Mark Attendance (once per day)
+document.getElementById("markBtn").onclick = async () => {
+  statusEl.innerText = "";
+  const branchRef = doc(db, "branches", currentUser.branchId);
+  const bDoc = await getDoc(branchRef);
+  if (!bDoc.exists()) return alert("Branch not found");
+  const b = bDoc.data();
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude, longitude } = pos.coords;
+    const distance = getDistance(latitude, longitude, b.lat, b.lng);
+    if (distance > b.radiusMeters) return alert("🚫 You are outside branch area");
+
+    const todayStr = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+
+    // Check if attendance already exists today
+    const q = query(
+      collection(db, "attendance"),
+      where("userId", "==", currentUser.id),
+      where("dateStr", "==", todayStr)
+    );
+    const existing = await getDocs(q);
+    if (!existing.empty) {
+      statusEl.innerText = "⚠️ Attendance already marked today!";
+      return;
+    }
+
+    // Add attendance
+    await addDoc(collection(db, "attendance"), {
+      userId: currentUser.id,
+      username: currentUser.username,
+      branchName: b.name,
+      branchId: currentUser.branchId,
+      time: serverTimestamp(),
+      dateStr: todayStr
+    });
+
+    statusEl.innerText = "✅ Attendance Marked Successfully!";
+  }, () => alert("⚠️ Location access denied."));
+};
+
+// 🚪 Sign out
+signOutBtn.onclick = () => location.reload();
+</script>
 </body>
 </html>
