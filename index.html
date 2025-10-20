@@ -86,7 +86,6 @@
       getDoc, query, where, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
-    // 🔥 Firebase Config
     const firebaseConfig = {
       apiKey: "AIzaSyArh9Lqdyio6QZ276L2ciMwEgU8BgigrFs",
       authDomain: "user-atten.firebaseapp.com",
@@ -96,7 +95,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // 🔐 Device ID
+    // Device ID
     const getDeviceId = () => {
       let id = localStorage.getItem('deviceId');
       if (!id) {
@@ -108,7 +107,7 @@
     const currentDeviceId = getDeviceId();
     let currentUser = null;
 
-    // 🌍 Haversine formula
+    // Haversine formula
     function getDistance(lat1, lon1, lat2, lon2) {
       const R = 6371000;
       const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -142,7 +141,7 @@
     const branchSelect = document.getElementById("branchSelect");
     const signOutBtn = document.getElementById("signOutBtn");
 
-    // 🔐 LOGIN
+    // LOGIN
     signInBtn.onclick = async () => {
       const username = document.getElementById('email').value.trim();
       const password = document.getElementById('pass').value.trim();
@@ -195,7 +194,7 @@
       }, () => alert("⚠️ Location access denied or unavailable."));
     };
 
-    // 📍 Add Branch
+    // Add Branch
     document.getElementById("btnAddBranch").onclick = async () => {
       const name = branchName.value.trim();
       const lat = parseFloat(branchLat.value);
@@ -207,7 +206,7 @@
       loadBranches();
     };
 
-    // 👤 Create User
+    // Create User
     document.getElementById("btnCreateUser").onclick = async () => {
       const username = userNameInput.value.trim();
       const password = userPass.value.trim();
@@ -245,9 +244,9 @@
       });
     }
 
-    // 🕒 Mark Attendance
+    // Mark Attendance (only once per day)
     document.getElementById("markBtn").onclick = async () => {
-      statusEl.innerText = ""; // clear previous
+      statusEl.innerText = "";
       const branchRef = doc(db, "branches", currentUser.branchId);
       const bDoc = await getDoc(branchRef);
       if (!bDoc.exists()) return alert("Branch not found");
@@ -258,6 +257,26 @@
         const distance = getDistance(latitude, longitude, b.lat, b.lng);
         if (distance > b.radiusMeters) return alert("🚫 You are outside branch area");
 
+        // Check if attendance already marked today
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const q = query(
+          collection(db, "attendance"),
+          where("userId", "==", currentUser.id),
+          where("time", ">=", today),
+          where("time", "<", tomorrow)
+        );
+
+        const existing = await getDocs(q);
+        if (!existing.empty) {
+          statusEl.innerText = "⚠️ Attendance already marked today!";
+          return;
+        }
+
+        // Mark attendance
         await addDoc(collection(db, "attendance"), {
           userId: currentUser.id,
           username: currentUser.username,
@@ -270,7 +289,7 @@
       }, () => alert("⚠️ Location access denied."));
     };
 
-    // 🚪 Sign out
+    // Sign out
     signOutBtn.onclick = () => location.reload();
   </script>
 </body>
