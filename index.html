@@ -158,64 +158,30 @@ signInBtn.onclick = async () => {
   if (!branchDoc.exists()) return alert("Branch not found");
 
   const branch = branchDoc.data();
-  const { lat, lng, radiusMeters } = branch;
 
-  navigator.geolocation.getCurrentPosition(async (pos) => {
-    const { latitude, longitude } = pos.coords;
-    const distance = getDistance(latitude, longitude, lat, lng);
+ 
+  if (!user.deviceId) {
+    await updateDoc(doc(db, 'users', docSnap.id), { deviceId: currentDeviceId });
+  } else if (user.deviceId !== currentDeviceId) {
+    alert("🚫 Account already linked to another device");
+    return;
+  }
 
-    if (isNaN(lat) || isNaN(lng)) return alert("⚠️ Invalid branch coordinates");
-    if (user.role !== "admin" && distance > radiusMeters) {
-      alert(`🚫 Outside branch area (${Math.round(distance)}m > ${radiusMeters}m)`);
-      return;
-    }
+  currentUser = { id: docSnap.id, ...user, branch };
+  userNameEl.textContent = currentUser.username;
+  authBox.style.display = "none";
 
-    if (!user.deviceId) {
-      await updateDoc(doc(db, 'users', docSnap.id), { deviceId: currentDeviceId });
-    } else if (user.deviceId !== currentDeviceId) {
-      alert("🚫 Account already linked to another device");
-      return;
-    }
-
-    currentUser = { id: docSnap.id, ...user, branch };
-    userNameEl.textContent = currentUser.username;
-    authBox.style.display = "none";
-
-    if (currentUser.role === 'admin') {
-      adminPanel.style.display = "block";
-      loadBranches();
-      loadUsers();
-    } else {
-      mainBox.style.display = "block";
-      loadAssignedBranch(currentUser.branchId);
-    }
-  }, () => alert("⚠️ Location access denied or unavailable."));
-};
-/*
-// 📍 Add Branch
-document.getElementById("btnAddBranch").onclick = async () => {
-  const name = branchName.value.trim();
-  const lat = parseFloat(branchLat.value);
-  const lng = parseFloat(branchLng.value);
-  const radius = parseInt(branchRadius.value);
-  if (!name || isNaN(lat) || isNaN(lng) || isNaN(radius)) return alert("Fill all fields");
-  await addDoc(collection(db, "branches"), { name, lat, lng, radiusMeters: radius });
-  alert("✅ Branch added!");
-  loadBranches();
+  if (currentUser.role === 'admin') {
+    adminPanel.style.display = "block";
+    loadBranches();
+    loadUsers();
+  } else {
+    mainBox.style.display = "block";
+    loadAssignedBranch(currentUser.branchId);
+  }
 };
 
-// 👤 Create User
-document.getElementById("btnCreateUser").onclick = async () => {
-  const username = userNameInput.value.trim();
-  const password = userPass.value.trim();
-  const branchId = userBranch.value;
-  const role = userRole.value;
-  if (!username || !password || !branchId) return alert("Fill all fields");
-  await addDoc(collection(db, "users"), { username, password, branchId, role, deviceId: "", createdAt: serverTimestamp() });
-  alert("✅ User created!");
-  loadUsers();
-};
-*/
+
 
 async function loadAssignedBranch(branchId) {
   const ref = doc(db, "branches", branchId);
