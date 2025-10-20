@@ -28,7 +28,7 @@
     <button id="signInBtn" class="w-full">Sign In</button>
   </div>
 
-  <!-- MAIN SECTION -->
+  <!-- MAIN SECTION (Staff) -->
   <div id="main" class="max-w-2xl mx-auto card">
     <div class="flex justify-between mb-4">
       <h3 class="text-xl font-semibold">Welcome <span id="userName"></span></h3>
@@ -38,7 +38,7 @@
       <label class="font-semibold">Assigned Branch</label>
       <select id="branchSelect" disabled class="mt-1"></select>
     </div>
-    <button id="markBtn" class="w-full mb-3">Mark Attendance</button>
+    <button id="markBtn" class="w-full mb-3">📍 Mark Attendance</button>
     <div id="status" class="text-center text-green-600 font-semibold"></div>
   </div>
 
@@ -82,10 +82,11 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
     import {
-      getFirestore, collection, addDoc, getDocs, doc,
-      updateDoc, getDoc, query, where, serverTimestamp
+      getFirestore, collection, addDoc, getDocs, doc, updateDoc,
+      getDoc, query, where, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
+    // 🔥 Firebase Config
     const firebaseConfig = {
       apiKey: "AIzaSyArh9Lqdyio6QZ276L2ciMwEgU8BgigrFs",
       authDomain: "user-atten.firebaseapp.com",
@@ -95,6 +96,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    // 🔐 Device ID
     const getDeviceId = () => {
       let id = localStorage.getItem('deviceId');
       if (!id) {
@@ -106,19 +108,19 @@
     const currentDeviceId = getDeviceId();
     let currentUser = null;
 
-    // 🌍 Calculate distance (Haversine)
+    // 🌍 Haversine formula
     function getDistance(lat1, lon1, lat2, lon2) {
       const R = 6371000;
       const dLat = (lat2 - lat1) * Math.PI / 180;
       const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(lat1 * Math.PI / 180) *
-        Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) ** 2;
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(lat1 * Math.PI / 180) *
+                Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) ** 2;
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
+    // Elements
     const signInBtn = document.getElementById('signInBtn');
     const authBox = document.getElementById('authBox');
     const mainBox = document.getElementById('main');
@@ -137,7 +139,6 @@
 
       const docSnap = snapshot.docs[0];
       const user = docSnap.data();
-
       if (user.password !== password) return alert("Incorrect password");
 
       const branchRef = doc(db, "branches", user.branchId);
@@ -145,27 +146,20 @@
       if (!branchDoc.exists()) return alert("Branch not found");
 
       const branch = branchDoc.data();
-      const branchLat = Number(branch.lat);
-      const branchLng = Number(branch.lng);
-      const radius = Number(branch.radiusMeters);
+      const { lat, lng, radiusMeters } = branch;
 
+      // ✅ Location check
       navigator.geolocation.getCurrentPosition(async (pos) => {
         const { latitude, longitude } = pos.coords;
-        const distance = getDistance(latitude, longitude, branchLat, branchLng);
+        const distance = getDistance(latitude, longitude, lat, lng);
 
-        console.log(`📍 You are ${Math.round(distance)} meters from branch (Allowed: ${radius}m)`);
-
-        if (isNaN(branchLat) || isNaN(branchLng)) {
-          alert("⚠️ Invalid branch coordinates.");
+        if (isNaN(lat) || isNaN(lng)) return alert("⚠️ Invalid branch coordinates");
+        if (user.role !== "admin" && distance > radiusMeters) {
+          alert(`🚫 Outside branch area (${Math.round(distance)}m > ${radiusMeters}m)`);
           return;
         }
 
-        if (distance > radius) {
-          alert(`🚫 You are outside the branch area.\nDistance: ${Math.round(distance)}m (Allowed: ${radius}m)`);
-          return;
-        }
-
-        // ✅ Device lock
+        // ✅ Device check
         if (!user.deviceId) {
           await updateDoc(doc(db, 'users', docSnap.id), { deviceId: currentDeviceId });
         } else if (user.deviceId !== currentDeviceId) {
@@ -173,7 +167,7 @@
           return;
         }
 
-        currentUser = { id: docSnap.id, ...user };
+        currentUser = { id: docSnap.id, ...user, branch };
         userNameEl.textContent = currentUser.username;
         authBox.style.display = "none";
 
@@ -188,58 +182,81 @@
       }, () => alert("⚠️ Location access denied or unavailable."));
     };
 
-    // 📍 Add branch
+    // 📍 Add Branch
     document.getElementById("btnAddBranch").onclick = async () => {
-      const name = document.getElementById("branchName").value.trim();
-      const lat = parseFloat(document.getElementById("branchLat").value);
-      const lng = parseFloat(document.getElementById("branchLng").value);
-      const radius = parseInt(document.getElementById("branchRadius").value);
+      const name = branchName.value.trim();
+      const lat = parseFloat(branchLat.value);
+      const lng = parseFloat(branchLng.value);
+      const radius = parseInt(branchRadius.value);
       if (!name || isNaN(lat) || isNaN(lng) || isNaN(radius)) return alert("Fill all fields");
       await addDoc(collection(db, "branches"), { name, lat, lng, radiusMeters: radius });
       alert("✅ Branch added!");
       loadBranches();
     };
 
-    async function loadAssignedBranch(branchId) {
-      const ref = doc(db, "branches", branchId);
-      const bDoc = await getDoc(ref);
-      if (!bDoc.exists()) return alert("Branch not found");
-      const b = bDoc.data();
-      document.getElementById("branchSelect").innerHTML = `<option>${b.name}</option>`;
-    }
-
-    async function loadBranches() {
-      const list = document.getElementById("branchList");
-      const sel = document.getElementById("userBranch");
-      list.innerHTML = sel.innerHTML = "";
-      const snaps = await getDocs(collection(db, "branches"));
-      snaps.forEach(d => {
-        const b = d.data();
-        list.innerHTML += `<li>${b.name} (${b.radiusMeters}m)</li>`;
-        sel.innerHTML += `<option value="${d.id}">${b.name}</option>`;
-      });
-    }
-
+    // 👤 Create User
     document.getElementById("btnCreateUser").onclick = async () => {
-      const username = document.getElementById("userNameInput").value.trim();
-      const password = document.getElementById("userPass").value.trim();
-      const branchId = document.getElementById("userBranch").value;
-      const role = document.getElementById("userRole").value;
+      const username = userNameInput.value.trim();
+      const password = userPass.value.trim();
+      const branchId = userBranch.value;
+      const role = userRole.value;
       if (!username || !password || !branchId) return alert("Fill all fields");
       await addDoc(collection(db, "users"), { username, password, branchId, role, deviceId: "", createdAt: serverTimestamp() });
       alert("✅ User created!");
       loadUsers();
     };
 
-    async function loadUsers() {
-      const list = document.getElementById("userList");
-      list.innerHTML = "";
-      const snaps = await getDocs(collection(db, "users"));
+    async function loadAssignedBranch(branchId) {
+      const ref = doc(db, "branches", branchId);
+      const bDoc = await getDoc(ref);
+      if (!bDoc.exists()) return;
+      branchSelect.innerHTML = `<option>${bDoc.data().name}</option>`;
+    }
+
+    async function loadBranches() {
+      const snaps = await getDocs(collection(db, "branches"));
+      branchList.innerHTML = userBranch.innerHTML = "";
       snaps.forEach(d => {
-        const u = d.data();
-        list.innerHTML += `<li>${u.username} (${u.role}) - ${u.branchId}</li>`;
+        const b = d.data();
+        branchList.innerHTML += `<li>${b.name} (${b.radiusMeters}m)</li>`;
+        userBranch.innerHTML += `<option value="${d.id}">${b.name}</option>`;
       });
     }
+
+    async function loadUsers() {
+      const snaps = await getDocs(collection(db, "users"));
+      userList.innerHTML = "";
+      snaps.forEach(d => {
+        const u = d.data();
+        userList.innerHTML += `<li>${u.username} (${u.role})</li>`;
+      });
+    }
+
+    // 🕒 Mark Attendance
+    document.getElementById("markBtn").onclick = async () => {
+      const branchRef = doc(db, "branches", currentUser.branchId);
+      const bDoc = await getDoc(branchRef);
+      if (!bDoc.exists()) return alert("Branch not found");
+      const b = bDoc.data();
+
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const distance = getDistance(latitude, longitude, b.lat, b.lng);
+        if (distance > b.radiusMeters) return alert("🚫 You are outside branch area");
+
+        await addDoc(collection(db, "attendance"), {
+          userId: currentUser.id,
+          username: currentUser.username,
+          branchName: b.name,
+          branchId: currentUser.branchId,
+          time: serverTimestamp(),
+        });
+        status.innerText = "✅ Attendance Marked Successfully!";
+      }, () => alert("⚠️ Location access denied."));
+    };
+
+    // 🚪 Sign out
+    signOutBtn.onclick = () => location.reload();
   </script>
 </body>
 </html>
