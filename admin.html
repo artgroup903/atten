@@ -126,8 +126,8 @@
 
       await addDoc(collection(db, "branches"), {
         name,
-        latitude: lat,
-        longitude: lon,
+        lat: lat,
+        lng: lon,
         radius_m: radius,
         createdAt: serverTimestamp()
       });
