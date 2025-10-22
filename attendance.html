@@ -77,7 +77,7 @@
       attSnaps.forEach(d => {
         const att = d.data();
         const ts = att.timestamp?.toDate?.() || new Date();
-        const dateStr = ts.toLocaleDateString();
+        const dateStr = ts.time();
         const timeStr = ts.toLocaleTimeString();
 
         const branchName = branchMap[att.branchId] || att.branchId;
@@ -100,3 +100,4 @@
 
 </body>
 </html>
+
