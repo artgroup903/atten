@@ -75,23 +75,33 @@
       }
 
       attSnaps.forEach(d => {
-        const att = d.data();
-        const ts = att.timestamp?.toDate?.() || new Date();
-        const dateStr = ts.time();
-        const timeStr = ts.toLocaleTimeString();
+  const att = d.data();
 
-        const branchName = branchMap[att.branchId] || att.branchId;
-        const userName = userMap[att.userId] || att.userId;
+  let ts;
+  if (att.timestamp?.toDate) {
+    ts = att.timestamp.toDate();
+  } else if (typeof att.timestamp === "number") {
+    ts = new Date(att.timestamp);
+  } else {
+    ts = new Date();
+  }
 
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${branchName}</td>
-          <td>${userName}</td>
-          <td>${dateStr}</td>
-          <td>${timeStr}</td>
-        `;
-        attendanceList.appendChild(row);
-      });
+  const dateStr = ts.toLocaleDateString();
+  const timeStr = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const branchName = branchMap[att.branchId] || att.branchId;
+  const userName = userMap[att.userId] || att.userId;
+
+  const row = document.createElement("tr");
+  row.innerHTML = `
+    <td>${branchName}</td>
+    <td>${userName}</td>
+    <td>${dateStr}</td>
+    <td>${timeStr}</td>
+  `;
+  attendanceList.appendChild(row);
+});
+
     }
 
     // Load attendance on page load
