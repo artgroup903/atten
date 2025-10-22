@@ -52,46 +52,92 @@
   const db = getFirestore(app);
   const attendanceList = document.getElementById("attendanceList");
 
-  async function loadAttendance() {
+  async function loadAttendanceSorted() {
     attendanceList.innerHTML = "<tr><td colspan='4' class='text-center'>Loading...</td></tr>";
 
+    // Load branch names map (safe if attendance docs only store branchId)
+    const branchSnaps = await getDocs(collection(db, "branches"));
+    const branchMap = {};
+    branchSnaps.forEach(d => {
+      const data = d.data();
+      branchMap[d.id] = data?.name || data?.branchName || d.id;
+    });
+
+    // Load users map
     const userSnaps = await getDocs(collection(db, "users"));
     const userMap = {};
-    userSnaps.forEach(d => { userMap[d.id] = d.data().username; });
+    userSnaps.forEach(d => { userMap[d.id] = d.data().username || d.data().name || d.id; });
 
+    // Load attendance
     const attSnaps = await getDocs(collection(db, "attendance"));
-    attendanceList.innerHTML = "";
-
     if (attSnaps.empty) {
       attendanceList.innerHTML = "<tr><td colspan='4' class='text-center'>No attendance records found.</td></tr>";
       return;
     }
 
-    attSnaps.forEach(d => {
-      const att = d.data();
+    // Collect attendance rows into array
+    const rows = [];
+    attSnaps.forEach(doc => {
+      const att = doc.data();
 
-      // 🔹 Convert Firestore Timestamp to readable time
-      const ts = att.time?.toDate ? att.time.toDate() : new Date();
+      // Resolve timestamp -> Date
+      const ts = att.time?.toDate ? att.time.toDate() :
+                 (typeof att.time === "number" ? new Date(att.time) : new Date());
+
       const dateStr = att.dateStr || ts.toLocaleDateString();
       const timeStr = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-      const branchName = att.branchName || "-";
-      const userName = userMap[att.userId] || att.userId;
+      // Prefer branchName saved in att doc, else use branchMap, else branchId
+      const branchName = (att.branchName && String(att.branchName).trim()) ||
+                         (att.branchId && branchMap[att.branchId]) ||
+                         (att.branchId) || "-";
 
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${branchName}</td>
-        <td>${userName}</td>
-        <td>${dateStr}</td>
-        <td>${timeStr}</td>
+      const userName = userMap[att.userId] || att.userId || "-";
+
+      rows.push({
+        branchName,
+        userName,
+        dateStr,
+        timeStr
+      });
+    });
+
+    // Sort A -> Z by branchName (case-insensitive)
+    rows.sort((a, b) => {
+      const x = String(a.branchName).toLowerCase();
+      const y = String(b.branchName).toLowerCase();
+      if (x < y) return -1;
+      if (x > y) return 1;
+      return 0;
+    });
+
+    // Render sorted rows
+    attendanceList.innerHTML = "";
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(r.branchName)}</td>
+        <td>${escapeHtml(r.userName)}</td>
+        <td>${escapeHtml(r.dateStr)}</td>
+        <td>${escapeHtml(r.timeStr)}</td>
       `;
-      attendanceList.appendChild(row);
+      attendanceList.appendChild(tr);
     });
   }
 
-  loadAttendance();
-</script>
+  // small helper to avoid accidental HTML injection if values contain < & etc.
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
 
+  // Run loader
+  loadAttendanceSorted();
+</script>
 
 </body>
 </html>
